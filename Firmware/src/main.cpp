@@ -194,7 +194,8 @@ void setup() {
 
     statusLedTicker.attach(0.2, statusLedLoop);
 
-    configMode = digitalRead(GPIO_CONFIG_BUTTON) == 0;
+    bool noStoredWifi = WiFi.SSID().isEmpty();
+    configMode = (digitalRead(GPIO_CONFIG_BUTTON) == 0) || noStoredWifi;
     if (configMode)
         statusLedData = 0xA000;
     
