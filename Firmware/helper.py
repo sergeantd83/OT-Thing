@@ -5,6 +5,9 @@ import esptool
 import time
 import webbrowser
 import requests
+import configparser
+import subprocess
+import tempfile
 from serial.tools import list_ports
 Import("env")
 
@@ -106,6 +109,75 @@ def before_upload(source, target, env):
             env.Replace(UPLOAD_PORT=d[0])
             break
 
+def load_ap_credentials(env):
+    """Read AP SSID/password from default.ini (secrets)."""
+    ini = os.path.join(env["PROJECT_DIR"], "default.ini")
+    cp = configparser.ConfigParser()
+    cp.read(ini)
+    ssid = cp.get("secrets", "ap_ssid", fallback="OT Thing")
+    password = cp.get("secrets", "ap_password", fallback="12345678")
+    return ssid, password
+
+def ensure_windows_wifi_profile(ssid, password):
+    """Create a Wi-Fi profile for the config AP on Windows if missing."""
+    if os.name != "nt":
+        return
+
+    try:
+        res = subprocess.run(
+            ["netsh", "wlan", "show", "profiles"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        if ssid in res.stdout:
+            return
+    except Exception as e:
+        print("Could not list Wi-Fi profiles; skipping profile creation:", e)
+        return
+
+    profile_xml = f"""<?xml version="1.0"?>
+<WLANProfile xmlns="http://www.microsoft.com/networking/WLAN/profile/v1">
+    <name>{ssid}</name>
+    <SSIDConfig>
+        <SSID>
+            <name>{ssid}</name>
+        </SSID>
+    </SSIDConfig>
+    <connectionType>ESS</connectionType>
+    <connectionMode>manual</connectionMode>
+    <MSM>
+        <security>
+            <authEncryption>
+                <authentication>WPA2PSK</authentication>
+                <encryption>AES</encryption>
+                <useOneX>false</useOneX>
+            </authEncryption>
+            <sharedKey>
+                <keyType>passPhrase</keyType>
+                <protected>false</protected>
+                <keyMaterial>{password}</keyMaterial>
+            </sharedKey>
+        </security>
+    </MSM>
+</WLANProfile>
+"""
+    tmp = None
+    try:
+        with tempfile.NamedTemporaryFile("w", delete=False, suffix=".xml") as f:
+            f.write(profile_xml)
+            tmp = f.name
+        subprocess.run(
+            ["netsh", "wlan", "add", "profile", f"filename={tmp}", "user=all"],
+            check=True,
+        )
+        print(f"Added Wi-Fi profile '{ssid}' for AP provisioning.")
+    except Exception as e:
+        print("Failed to add Wi-Fi profile for provisioning:", e)
+    finally:
+        if tmp and os.path.exists(tmp):
+            os.remove(tmp)
+
 def after_upload(source, target, env):
     upload_port = env.get("UPLOAD_PORT", None)
     if upload_port == None:
@@ -120,16 +192,41 @@ def after_upload(source, target, env):
         
         print("Bring target to config mode & press enter")
         input("")
-        os.system('cmd /c netsh wlan connect name = "OT Thing"')
+        ap_ssid, ap_password = load_ap_credentials(env)
+        ensure_windows_wifi_profile(ap_ssid, ap_password)
+        try:
+            subprocess.run(
+                ["netsh", "wlan", "connect", f"name={ap_ssid}"],
+                check=True,
+            )
+        except Exception as e:
+            print(f"Failed to connect to '{ap_ssid}' via netsh:", e)
         time.sleep(2)
         webbrowser.open('http://4.3.2.1')
         print("Press enter to send default config to target")
         input("")
-        print(requests.post("http://4.3.2.1/config", json=CONFIG))
-        time.sleep(1)
-        r = requests.get('http://4.3.2.1/config', timeout=3)
-        conf = r.json()
-        print("OT mode:", conf['otMode'])
+        resp = requests.post("http://4.3.2.1/config", json=CONFIG)
+        print(resp)
+        backoff = [1, 2, 3]
+        for delay_s in backoff:
+            time.sleep(delay_s)
+            try:
+                r = requests.get('http://4.3.2.1/config', timeout=3)
+            except Exception as e:
+                print(f"/config GET attempt failed ({e}); retrying...")
+                continue
+
+            if r.status_code != 200:
+                print(f"/config GET returned {r.status_code}, body:\n{r.text}")
+                continue
+            try:
+                conf = r.json()
+                print("OT mode:", conf.get("otMode"))
+                break
+            except Exception as e:
+                print("Failed to parse /config JSON:", e, "body:\n", r.text)
+        else:
+            print("Unable to read /config after retries.")
 
 
 env.AddPreAction("$BUILD_DIR/src/portal.cpp.o", copy_html)
