@@ -120,16 +120,18 @@ void displayNetworkStatus() {
 #endif // NODO
 
 void setup() {
+    Serial.begin();
+    Serial.setTxTimeoutMs(100);
     pinMode(GPIO_STATUS_LED, OUTPUT);
     pinMode(GPIO_CONFIG_BUTTON, INPUT);
     
     setLedStatus(false);
 #ifdef NODO  // Initialize I2C display and wired ethernet
-  Wire.begin(GPIO_I2C_SDA, GPIO_I2C_SCL);  // SDA=21, SCL=22 (default ESP32 pins)
+    Wire.begin(GPIO_I2C_SDA, GPIO_I2C_SCL);  // SDA=21, SCL=22 (default ESP32 pins)
 
-  // Initialize OLED
-  Wire.beginTransmission(0x3C);
-  if (Wire.endTransmission() == 0) { // device responded
+    // Initialize OLED
+    Wire.beginTransmission(0x3C);
+    if (Wire.endTransmission() == 0) { // device responded
     if (oled_display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
       // Clear buffer
       oled_display.clearDisplay();
@@ -195,9 +197,6 @@ void setup() {
     configMode = digitalRead(GPIO_CONFIG_BUTTON) == 0;
     if (configMode)
         statusLedData = 0xA000;
-
-    Serial.begin();
-    Serial.setTxTimeoutMs(100);
     
     WiFi.onEvent(wifiEvent);
     WiFi.setSleep(false);
