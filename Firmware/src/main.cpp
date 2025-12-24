@@ -162,7 +162,7 @@ void setup() {
   driver.setSpiFreq(10);
   driver.setPhyAddress(0);
   Ethernet.init(driver);
-  if (Ethernet.hardwareStatus() != EthernetHardwareFound) {
+  {
     // Get ESP32 MAC
     uint64_t mac64 = ESP.getEfuseMac();
     for (int i = 0; i < 6; i++) {
@@ -184,11 +184,11 @@ void setup() {
       } else {
         Serial.println("Physical link is DOWN. Check cable connection.");
       }
+    } else if ( Ethernet.hardwareStatus() == EthernetNoHardware ) {
+      Serial.println("Failed to obtain DHCP, no hardware");
     } else {
       Serial.println("Failed to obtain DHCP");
     }
-  } else {
-    Serial.printf("no Ethernet hardware found\n");
   }
 #endif
   otcontrol.begin();
