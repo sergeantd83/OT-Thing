@@ -144,12 +144,12 @@ void setup() {
       oled_display.clearDisplay();
 
       // Set text properties
-      oled_display.setTextSize(2);             // Text size multiplier
+      oled_display.setTextSize(1);             // Text size multiplier
       oled_display.setTextColor(SSD1306_WHITE);
       oled_display.setCursor(10, 25);          // Position on screen
 
       // Print message
-      oled_display.println("Nodo OTGW32");
+      oled_display.println("Nodo OTGW32 V1.0");
 
       // Push to display
       oled_display.display();
