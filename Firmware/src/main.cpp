@@ -88,6 +88,7 @@ void displayNetworkStatus() {
 
     String ipLine = F("");
     String statusLine = F("");
+    String thirdLine = F("");
 
     if (configMode) {
         // 1. CONFIG MODE (Highest Priority Display)
@@ -118,7 +119,9 @@ void displayNetworkStatus() {
     oled_display.setCursor(0, 20);
     // Placeholder: This will require accessing OT status variables
     // oled_display.println(F("OT Status: OK/Fail")); 
-    
+    thirdLine = String(ESP.getFreeHeap()) + String(F(" bytes free"));
+    oled_display.println(thirdLine);
+
     oled_display.display();
 }
 #endif // NODO
