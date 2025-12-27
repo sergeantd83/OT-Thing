@@ -84,43 +84,46 @@ void displayNetworkStatus() {
     oled_display.clearDisplay();
     oled_display.setTextSize(1);
     oled_display.setTextColor(SSD1306_WHITE);
+    // 1. Create a fixed-size buffer
+    char buffer[64]; 
+
+    oled_display.clearDisplay();
     oled_display.setCursor(0, 0);
 
-    String ipLine = F("");
-    String statusLine = F("");
-    String thirdLine = F("");
-
     if (configMode) {
-        // 1. CONFIG MODE (Highest Priority Display)
-        statusLine = String(F("SSID: ")) + WiFi.softAPSSID();
-        ipLine = String(F("http://")) + WiFi.softAPIP().toString() + "/";
-    } else if (WIRED_ETHERNET_PRESENT) {
-        // 2. WIRED ETHERNET (Ethernet is active and connected)
-        statusLine = F("Wired Network");
-        ipLine = String(F("IP: ")) + Ethernet.localIP().toString();
-    } else {
-        // 3. WIFI STATUS (Ethernet failed or is absent)
-        statusLine = String(F("WiFi: ")) + WiFi.SSID();
+        // Using snprintf to format the string into the buffer
+        snprintf(buffer, sizeof(buffer), "SSID: %s", WiFi.softAPSSID().c_str());
+        oled_display.println(buffer);
+        
+        oled_display.setCursor(0, 10);
+        snprintf(buffer, sizeof(buffer), "http://%s/", WiFi.softAPIP().toString().c_str());
+        oled_display.println(buffer);
 
+    } else if (WIRED_ETHERNET_PRESENT) {
+        oled_display.println(F("Wired Network"));
+        
+        oled_display.setCursor(0, 10);
+        snprintf(buffer, sizeof(buffer), "IP: %s", Ethernet.localIP().toString().c_str());
+        oled_display.println(buffer);
+
+    } else {
+        snprintf(buffer, sizeof(buffer), "WiFi: %s", WiFi.SSID().c_str());
+        oled_display.println(buffer);
+
+        oled_display.setCursor(0, 10);
         if (WiFi.isConnected()) {
-            ipLine = String(F("IP: ")) + WiFi.localIP().toString();
+            snprintf(buffer, sizeof(buffer), "IP: %s", WiFi.localIP().toString().c_str());
+            oled_display.println(buffer);
         } else {
-            ipLine = "Connecting";
+            oled_display.println(F("Connecting..."));
         }
     }
 
-    // Draw the lines
-    oled_display.println(statusLine);
-    oled_display.setCursor(0, 10);
-    oled_display.println(ipLine);
-
-    // --- Add OT Status Line ---
-    // You can add a third line for boiler status, e.g., using otcontrol.getStatus()
+    // --- Third Line: Memory Status ---
     oled_display.setCursor(0, 20);
-    // Placeholder: This will require accessing OT status variables
-    // oled_display.println(F("OT Status: OK/Fail")); 
-    thirdLine = String(ESP.getFreeHeap()) + String(F(" bytes free"));
-    oled_display.println(thirdLine);
+    // %u is for unsigned int, %lu is for long unsigned (safer for 32-bit heap values)
+    snprintf(buffer, sizeof(buffer), "%lu bytes free", (unsigned long)ESP.getFreeHeap());
+    oled_display.println(buffer);
 
     oled_display.display();
 }
