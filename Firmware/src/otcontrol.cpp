@@ -32,7 +32,8 @@ const struct {
     uint16_t value;
 } loopbackTestData[] PROGMEM = {
     {OpenThermMessageID::Status,                    0x000E},
-    {OpenThermMessageID::SConfigSMemberIDcode,      0x2501}, // DHW present, cooling present, CH2 present
+    {OpenThermMessageID::MConfigMMemberIDcode,  0x0103}, // Signal high power available
+    {OpenThermMessageID::SConfigSMemberIDcode,      0x2511}, // DHW present, cooling present, CH2 present, SP capable
     {OpenThermMessageID::ASFflags,                  0x0000}, // no error flags, oem error code 0
     {OpenThermMessageID::RBPflags,                  0x0101},
     {OpenThermMessageID::TrOverride,                0},
@@ -610,6 +611,16 @@ void OTControl::OnRxSlave(const unsigned long msg, const OpenThermResponseStatus
                     const uint16_t tmp = timeinfo.tm_year + 1900;
                     resp = OpenTherm::buildResponse(OpenThermMessageType::READ_ACK, id, tmp);
                 }
+                break;
+            }
+
+            case OpenThermMessageID::MConfigMMemberIDcode: { // ID 125
+                /* HB: Master Version
+                LB: Master Config bits (Bit 0-1 are Smart Power)
+                Value 0x0103 = Version 1, Smart Power High (Level 3)
+                */
+                uint16_t smartPowerValue = 0x0103; 
+                resp = OpenTherm::buildResponse(OpenThermMessageType::READ_ACK, id, smartPowerValue);
                 break;
             }
 
