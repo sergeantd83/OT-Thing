@@ -500,6 +500,18 @@ void OTControl::OnRxMaster(const unsigned long msg, const OpenThermResponseStatu
         // forward reply from boiler to room unit
         // READ replies can be modified here
         switch (id) {
+        case OpenThermMessageID::MConfigMMemberIDcode: {
+            // Force High Power Level 3 (0x03) and Version 1 (0x01)
+            newMsg = OpenTherm::buildResponse(mt, id, 0x0103);
+            break;
+        }
+        case OpenThermMessageID::SConfigSMemberIDcode: {
+            // Take the boiler's actual config (msg & 0xFFFF) and OR in Bit 4 (0x1000)
+            // This preserves boiler features (DHW/CH2) but adds Smart Power support
+            uint16_t val = (msg & 0xFFFF) | 0x1000;
+            newMsg = OpenTherm::buildResponse(mt, id, val);
+            break;
+        }
         case OpenThermMessageID::Toutside: {
             double ost;
             if ( !outsideTemp.isOtSource() && outsideTemp.get(ost))
