@@ -123,7 +123,17 @@ String Mqtt::getBaseTopic() {
 }
 
 void Mqtt::loop() {
+#ifdef NODO
+    bool link_up;
+    if (WIRED_ETHERNET_PRESENT)
+        link_up = Ethernet.linkStatus() == LinkON;
+    else
+        link_up = WiFi.isConnected();
+
+    if (!cli.connected() && ((millis() - lastConTry) > 10000) && link_up && configSet) {
+#else
     if (!cli.connected() && ((millis() - lastConTry) > 10000) && WiFi.isConnected() && configSet) {
+#endif
         lastConTry = millis();
         cli.connect();
         haDisc.defaultStateTopic = baseTopic + F("/state");
