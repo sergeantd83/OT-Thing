@@ -78,7 +78,7 @@ class scanCallbacks : public NimBLEScanCallbacks {
 Adafruit_SSD1306 oled_display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 byte ethMac[6];
 // ** New function for display status **
-void displayNetworkStatus() {
+void displayNetworkStatus(unsigned long now) {
     if (!OLED_PRESENT)
         return; // Skip if no display detected
     oled_display.clearDisplay();
@@ -90,14 +90,15 @@ void displayNetworkStatus() {
     oled_display.clearDisplay();
     oled_display.ssd1306_command(SSD1306_SETCONTRAST);
     oled_display.ssd1306_command(1);
-    static boolean disp_on = true;
-    auto but = digitalRead(GPIO_BOOT_BUTTON);
-    if ( !but && !disp_on ){
+    static unsigned long on_time = 20;
+    if ( digitalRead(GPIO_BOOT_BUTTON) ){
       oled_display.ssd1306_command(SSD1306_DISPLAYON);
-      disp_on = true;
-    } else if ( but && disp_on ){
-      oled_display.ssd1306_command(SSD1306_DISPLAYOFF);
-      disp_on = false;
+      on_time = now;
+    } else {
+      if ( on_time > 10 && (now-on_time) > 10000 ){
+        oled_display.ssd1306_command(SSD1306_DISPLAYOFF);
+        on_time = 0;
+      }
     }
     oled_display.setCursor(0, 0);
 
@@ -165,7 +166,7 @@ void setup() {
       // Print message
       oled_display.println("Nodo OTGW32 V1.0.0");
       oled_display.setCursor(0, 20);          // Position on screen
-      oled_display.println("Hold Boot to view");
+      oled_display.println("Press Boot to view");
 
       // Push to display
       oled_display.display();
@@ -283,7 +284,7 @@ void loop() {
 #ifdef NODO
     static unsigned long lastDisplayUpdate = 0;
     if (now - lastDisplayUpdate > 1000) { 
-        displayNetworkStatus(); 
+        displayNetworkStatus(now); 
         lastDisplayUpdate = now;
     }
     if (WIRED_ETHERNET_PRESENT) {
