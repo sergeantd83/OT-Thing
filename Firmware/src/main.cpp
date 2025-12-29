@@ -89,7 +89,7 @@ void displayNetworkStatus() {
 
     oled_display.clearDisplay();
     oled_display.ssd1306_command(SSD1306_SETCONTRAST);
-    oled_display.ssd1306_command(10);
+    oled_display.ssd1306_command(1-digitalRead(0)); // show if Boot held down
     oled_display.setCursor(0, 0);
 
     if (configMode) {
@@ -151,10 +151,12 @@ void setup() {
       // Set text properties
       oled_display.setTextSize(1);             // Text size multiplier
       oled_display.setTextColor(SSD1306_WHITE);
-      oled_display.setCursor(10, 25);          // Position on screen
+      oled_display.setCursor(0, 0);          // Position on screen
 
       // Print message
-      oled_display.println("Nodo OTGW32 V1.0");
+      oled_display.println("Nodo OTGW32 V1.0.0");
+      oled_display.setCursor(0, 10);          // Position on screen
+      oled_display.println("Hold Boot for data");
 
       // Push to display
       oled_display.display();
