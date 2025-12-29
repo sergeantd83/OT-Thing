@@ -11,6 +11,7 @@
 #include <Ethernet.h>
 extern bool WIRED_ETHERNET_PRESENT; 
 /* pin defs for Nodo OTGW32 PCB */
+#define GPIO_BOOT_BUTTON 0
 #define GPIO_CONFIG_BUTTON 9
 #define GPIO_STATUS_LED 8
 #define GPIO_OTRED_LED 2

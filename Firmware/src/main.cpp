@@ -89,7 +89,16 @@ void displayNetworkStatus() {
 
     oled_display.clearDisplay();
     oled_display.ssd1306_command(SSD1306_SETCONTRAST);
-    oled_display.ssd1306_command(1-digitalRead(0)); // show if Boot held down
+    oled_display.ssd1306_command(1);
+    static boolean disp_on = true;
+    auto but = digitalRead(GPIO_BOOT_BUTTON);
+    if ( !but && !disp_on ){
+      oled_display.ssd1306_command(SSD1306_DISPLAYON);
+      disp_on = true;
+    } else if ( but && disp_on ){
+      oled_display.ssd1306_command(SSD1306_DISPLAYOFF);
+      disp_on = false;
+    }
     oled_display.setCursor(0, 0);
 
     if (configMode) {
@@ -155,8 +164,8 @@ void setup() {
 
       // Print message
       oled_display.println("Nodo OTGW32 V1.0.0");
-      oled_display.setCursor(0, 10);          // Position on screen
-      oled_display.println("Hold Boot for data");
+      oled_display.setCursor(0, 20);          // Position on screen
+      oled_display.println("Hold Boot to view");
 
       // Push to display
       oled_display.display();
