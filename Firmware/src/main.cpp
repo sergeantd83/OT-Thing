@@ -88,6 +88,8 @@ void displayNetworkStatus() {
     char buffer[64]; 
 
     oled_display.clearDisplay();
+    oled_display.ssd1306_command(SSD1306_SETCONTRAST);
+    oled_display.ssd1306_command(10);
     oled_display.setCursor(0, 0);
 
     if (configMode) {
