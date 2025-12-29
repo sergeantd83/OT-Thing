@@ -149,6 +149,10 @@ void setup() {
     
     setLedStatus(false);
 #ifdef NODO  // Initialize I2C display and wired ethernet
+    const unsigned char flame_bitmap[] PROGMEM = {
+        0x01, 0x00, 0x01, 0x00, 0x03, 0x00, 0x03, 0x80, 0x07, 0x80, 0x0f, 0xc0, 0x1f, 0xe0, 0x3f, 0xf0, 
+        0x3f, 0xf0, 0x7f, 0xf8, 0x77, 0xf8, 0x73, 0xf8, 0xff, 0xf8, 0xff, 0xf8, 0x3f, 0xf0, 0x1f, 0xe0
+    };
     Wire.begin(GPIO_I2C_SDA, GPIO_I2C_SCL);  // SDA=21, SCL=22 (default ESP32 pins)
 
     // Initialize OLED
@@ -165,9 +169,10 @@ void setup() {
 
       // Print message
       oled_display.println("Nodo OTGW32 V1.0.0");
-      oled_display.setCursor(0, 20);          // Position on screen
-      oled_display.println("Hold Boot to view");
-
+      oled_display.setCursor(0, 10);          // Position on screen
+      oled_display.println("Hold Boot for screen");
+      // pretty flame
+      oled_display.drawBitmap(60, 30, flame_bitmap, 16, 16, WHITE);
       // Push to display
       oled_display.display();
       OLED_PRESENT = true;
