@@ -172,7 +172,7 @@ void setup() {
       oled_display.setCursor(0, 10);          // Position on screen
       oled_display.println("Hold Boot for screen");
       // pretty flame
-      oled_display.drawBitmap(60, 30, flame_bitmap, 16, 16, WHITE);
+      oled_display.drawBitmap(56, 34, flame_bitmap, 16, 16, WHITE);
       // Push to display
       oled_display.display();
       OLED_PRESENT = true;
