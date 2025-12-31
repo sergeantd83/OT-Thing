@@ -84,7 +84,7 @@ void IRAM_ATTR nodo_boot_button_interrupt(void *arg) {
     xQueueSendFromISR(button_press_queue, &t, NULL);
   }
 }
-const int number_of_pages = 3;
+const int number_of_pages = 5;
 int64_t last_c = 0;
 int pageno = 0;
 
@@ -123,7 +123,7 @@ void displayNetworkStatus(unsigned long now) {
     }
   } 
   if ( c == 0 ){ // button not pressed
-    if ( on_time > 10 && (now-on_time) > 10000 ) { // display timeout
+    if ( on_time > 10 && (now-on_time) > 30000 ) { // display timeout
       oled_display.ssd1306_command(SSD1306_DISPLAYOFF);
       on_time = 0;
       pageno = 0;
@@ -163,11 +163,57 @@ void displayNetworkStatus(unsigned long now) {
           }
         }
         oled_display.setCursor(0,30);
-        oled_display.println("Hold Boot for more");
+        oled_display.println("Press Boot button for more");
       } // config mode
-    } else { // pageno > 1
-      snprintf(buffer, sizeof(buffer), "Page %d", pageno);
-      oled_display.println(buffer);
+    } else if ( pageno > 1 ) { 
+      devstatus.lock(); 
+      // Make a copy so we can unlock devstatus.
+      JsonDocument &doc= devstatus.buildDoc();
+      if ( pageno == 2 || pageno == 3 ){
+        snprintf(buffer, sizeof(buffer), "Heating circuit %d", pageno-1);
+        oled_display.println(buffer);
+        oled_display.println("");
+        JsonArray array = doc["heatercircuit"].as<JsonArray>();
+        if ( !array.isNull() && array.size() > (pageno-2) ){
+          auto obj = array[pageno-2].as<JsonObject>();
+          if ( !obj["roomsetpoint"].isNull() ){
+            float rsp = obj["roomsetpoint"];
+            snprintf(buffer, sizeof(buffer), "Room setpoint: %.1f", rsp);
+            oled_display.println(buffer);
+          }
+          if ( !obj["roomtemp"].isNull() ){
+            float rsp = obj["roomtemp"];
+            snprintf(buffer, sizeof(buffer), "Room temp:     %.1f", rsp);
+            oled_display.println(buffer);
+          }
+        } else {
+          oled_display.println("Not Found.");
+        }
+      } else if (pageno == 4 ){
+        snprintf(buffer, sizeof(buffer), "Status");
+        oled_display.println(buffer);
+        oled_display.println("");
+
+        String str = doc["fw_version"];
+        snprintf(buffer, sizeof(buffer), "FW version: %s", str.c_str());
+        oled_display.println(buffer);
+        unsigned ut = doc["runtime"];
+        snprintf(buffer, sizeof(buffer), "Runtime:    %u s", ut);
+        oled_display.println(buffer);
+        if ( !doc["mqtt"].isNull() ){
+          snprintf(buffer, sizeof(buffer), "MQTT:       %s", doc["mqtt"]["connected"] == false? "disconnected":"connected");
+          oled_display.println(buffer);
+          if ( doc["mqtt"]["basetopic"].isNull() ){
+            snprintf(buffer, sizeof(buffer), "MQTT topic: n/a");
+          } else {
+            String str = doc["mqtt"]["basetopic"];
+            snprintf(buffer, sizeof(buffer), "MQTT topic: %s", str.c_str());
+          }
+          oled_display.println(buffer);
+        }
+
+      }
+      devstatus.unlock();
     }
     // --- Memory Status ---
     // oled_display.setCursor(0, 20);
@@ -276,11 +322,15 @@ void setup() {
     statusLedData = 0xA000;
   }
 
+#ifdef NODO
   if (WIRED_ETHERNET_PRESENT == false) {
+#endif
     WiFi.onEvent(wifiEvent);
     WiFi.setSleep(false);
     WiFi.begin();
+#ifdef NODO
   }
+#endif
   OneWireNode::begin();
   haDisc.begin();
   mqtt.begin();
