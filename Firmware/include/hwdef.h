@@ -56,12 +56,13 @@ inline void setLedOTRed(const bool on) {
     static int init = 0;
     if ( !init ) {
       ledcAttachChannel(GPIO_OTRED_LED, 5000, 8, 2); 
+      ledcOutputInvert(GPIO_OTRED_LED, true);
       init = 1;
     }
     if (!on) {
-      ledcWrite(GPIO_OTRED_LED, 255);
+      ledcWrite(GPIO_OTRED_LED, 0);
     } else {
-      ledcWrite(GPIO_OTRED_LED, 255-LED_BRIGHTNESS); // dim
+      ledcWrite(GPIO_OTRED_LED, LED_BRIGHTNESS); // dim
     }
 #else
     digitalWrite(GPIO_OTRED_LED, !on);
@@ -73,12 +74,13 @@ inline void setLedOTGreen(const bool on) {
     static int init = 0;
     if ( !init ) {
       ledcAttachChannel(GPIO_OTGREEN_LED, 5000, 8, 1); 
+      ledcOutputInvert(GPIO_OTGREEN_LED, false);
       init = 1;
     }
-    if (on) {
-    ledcWrite(GPIO_OTGREEN_LED, 0);
+    if (!on) {
+      ledcWrite(GPIO_OTGREEN_LED, 0);
     } else {
-    ledcWrite(GPIO_OTGREEN_LED, LED_BRIGHTNESS); // dim
+      ledcWrite(GPIO_OTGREEN_LED, LED_BRIGHTNESS); // dim
     }
 #else
     digitalWrite(GPIO_OTGREEN_LED, !on);
@@ -90,12 +92,13 @@ inline void setLedStatus(const bool on) {
     static int init = 0;
     if ( !init ) {
       ledcAttachChannel(GPIO_STATUS_LED, 5000, 8, 0); 
+      ledcOutputInvert(GPIO_STATUS_LED, true);
       init = 1;
     }
     if (!on) {
-      ledcWrite(GPIO_STATUS_LED, 255); // dim
+      ledcWrite(GPIO_STATUS_LED, 0); // dim
     } else {
-    ledcWrite(GPIO_STATUS_LED, 255-LED_BRIGHTNESS); // dim
+      ledcWrite(GPIO_STATUS_LED, LED_BRIGHTNESS); // dim
     }
 #else
     digitalWrite(GPIO_STATUS_LED, !on);
