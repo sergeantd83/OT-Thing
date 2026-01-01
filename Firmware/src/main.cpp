@@ -27,9 +27,14 @@ W5500Driver driver(GPIO_SPI_CS, GPIO_SPI_INT, GPIO_SPI_RST);
 char buffer[64]; 
 byte ethMac[6];
 #endif
+
 Ticker statusLedTicker;
 volatile uint16_t statusLedData = 0x8000;
 bool configMode = false;
+
+// Variables for dynamic network management
+unsigned long lastNetworkCheck = 0;
+const unsigned long netCheckInterval = 5000; // Check physical link every 5 seconds
 
 void statusLedLoop() {
     static uint16_t mask = 0x8000;
@@ -51,14 +56,18 @@ void wifiEvent(WiFiEvent_t event) {
     }
 
     case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
-        devstatus.numWifiDiscon++;
-        WiFi.reconnect();
+        // Only trigger reconnect if we aren't currently using Wired Ethernet
+        if (!WIRED_ETHERNET_PRESENT) {
+            devstatus.numWifiDiscon++;
+            WiFi.reconnect();
+        }
         break;
 
     default:
         break;
     }
 }
+
 /*
 class scanCallbacks : public NimBLEScanCallbacks {
     void onDiscovered(const NimBLEAdvertisedDevice* advertisedDevice) override {
@@ -94,41 +103,45 @@ void displayNetworkStatus(unsigned long now) {
   if (!OLED_PRESENT)
       return; // Skip if no display detected
 
-  static unsigned long on_time = 20;
+  static unsigned long on_time = 0;
+  static int last_pageno_state = 0;
 
   int64_t c = 0;
   while (xQueueReceive(button_press_queue, &c, 0)) {
-
-    // Skip this press.
+    // Debounce check
     if ( (c - last_c ) < 300000 ){
-      Serial.println("Button press ignored\n");
       last_c = c;
       continue;
     }
     last_c = c;
-    Serial.println("Button press detected\n");
-    if (!pageno) { // display off so turn on
+    
+    // Cycle pages or turn on if it was off
+    if (pageno == 0) {
+        pageno = 1;
+    } else {
+        pageno++;
+        if (pageno >= number_of_pages) pageno = 1;
+    }
+    on_time = now; // Reset timer on manual interaction
+  } 
+
+  // --- AUTOMATIC WAKE LOGIC ---
+  // If pageno was just set to 1 (by manageNetwork OR button) and it was previously 0
+  if (pageno > 0 && last_pageno_state == 0) {
       oled_display.ssd1306_command(SSD1306_DISPLAYON);
       oled_display.setTextSize(1);
       oled_display.setTextColor(SSD1306_WHITE);
-      on_time = now;
-      pageno = 1;
-    } else { // request next page
-      on_time = now; // reset timeout 
-      pageno++;
-      if ( pageno >= number_of_pages ) {
-        pageno = 1;
-      }
-      Serial.printf("Page num: %u\n", pageno);
-    }
-  } 
-  if ( c == 0 ){ // button not pressed
-    if ( on_time > 10 && (now-on_time) > 30000 ) { // display timeout
-      oled_display.ssd1306_command(SSD1306_DISPLAYOFF);
-      on_time = 0;
-      pageno = 0;
-    }
+      if (on_time == 0) on_time = now; // Only set if not already set by button
   }
+
+  // --- TIMEOUT LOGIC ---
+  if ( pageno > 0 && (now - on_time) > 30000 ) {
+      oled_display.ssd1306_command(SSD1306_DISPLAYOFF);
+      pageno = 0;
+      on_time = 0;
+  }
+  
+  last_pageno_state = pageno;
 
   if (pageno) { // display on, needs updating
     oled_display.clearDisplay();
@@ -163,7 +176,7 @@ void displayNetworkStatus(unsigned long now) {
           }
         }
         oled_display.setCursor(0,30);
-        oled_display.println("Press Boot button for more");
+        oled_display.println("Press Boot for more");
       } // config mode
     } else if ( pageno > 1 ) { 
       devstatus.lock(); 
@@ -224,6 +237,37 @@ void displayNetworkStatus(unsigned long now) {
     oled_display.display();
   }
 }
+
+// Helper to switch interfaces based on physical link
+void manageNetwork() {
+    unsigned long now = millis();
+    if (now - lastNetworkCheck < netCheckInterval) return;
+    lastNetworkCheck = now;
+
+    bool hasLink = (Ethernet.linkStatus() == LinkON);
+
+    // If Ethernet cable just plugged in, but we are currently on WiFi
+    if (hasLink && !WIRED_ETHERNET_PRESENT) {
+        Serial.println("Ethernet link detected. Switching to Wired...");
+        if (!pageno) pageno=1; // wake display
+        if (Ethernet.begin(ethMac, 2000)) { 
+            WIRED_ETHERNET_PRESENT = true;
+            WiFi.disconnect(); // Turn off WiFi to avoid routing conflicts
+            Serial.print("Wired IP: ");
+            Serial.println(Ethernet.localIP());
+            
+            String hn = devconfig.getHostname();
+            MDNS.begin(hn.c_str());
+        }
+    } 
+    // If Ethernet cable unplugged, but we were using Wired
+    else if (!hasLink && WIRED_ETHERNET_PRESENT) {
+        if (!pageno) pageno=1; // wake display
+        Serial.println("Ethernet link lost. Switching to WiFi...");
+        WIRED_ETHERNET_PRESENT = false;
+        WiFi.begin(); 
+    }
+}
 #endif // NODO
 
 void setup() {
@@ -255,12 +299,13 @@ void setup() {
       // Print message
       oled_display.println("Nodo OTGW32 V1.0.0");
       oled_display.setCursor(0, 20);          // Position on screen
-      oled_display.println("Hold Boot for screen");
+      oled_display.println("Press Boot for more");
       // pretty flame
       oled_display.drawBitmap(56, 34, flame_bitmap, 16, 16, WHITE);
       // Push to display
       oled_display.display();
       OLED_PRESENT = true;
+      pageno = 1;
     }
   }
   button_press_queue = xQueueCreate(10, sizeof(int64_t));
@@ -289,19 +334,11 @@ void setup() {
                   ethMac[0], ethMac[1], ethMac[2], ethMac[3], ethMac[4],
                   ethMac[5]);
 
-    Serial.println("Waiting 10s to get dhcp lease");
-    if (Ethernet.begin(ethMac, 10000)) {
-      if (Ethernet.linkStatus() == LinkON) { // belt and braces
-        Serial.print("DHCP successful! IP address: ");
-        Serial.println(Ethernet.localIP());
+    // Fast check at boot
+    if (Ethernet.begin(ethMac, 1000)) {
+      if (Ethernet.linkStatus() == LinkON) {
         WIRED_ETHERNET_PRESENT = true;
-      } else {
-        Serial.println("Physical link is DOWN. Check cable connection.");
       }
-    } else if ( Ethernet.hardwareStatus() == EthernetNoHardware ) {
-      Serial.println("Failed to obtain DHCP, no hardware");
-    } else {
-      Serial.println("Failed to obtain DHCP");
     }
   }
 #endif
@@ -320,12 +357,14 @@ void setup() {
   configMode = (digitalRead(GPIO_CONFIG_BUTTON) == 0) || noStoredWifi;
   if (configMode) {
     statusLedData = 0xA000;
+  } else {
+    WiFi.onEvent(wifiEvent); // Register event for auto-reconnect logic
   }
 
 #ifdef NODO
+  // Only start WiFi if Ethernet isn't already running
   if (WIRED_ETHERNET_PRESENT == false) {
 #endif
-    WiFi.onEvent(wifiEvent);
     WiFi.setSleep(false);
     WiFi.begin();
 #ifdef NODO
@@ -368,7 +407,6 @@ void loop() {
                 yield();
             ESP.restart();
         }
-        return;
     }
     else
         btnDown = now;
@@ -376,13 +414,13 @@ void loop() {
 #ifdef DEBUG
     ArduinoOTA.handle();
 #endif
-    portal.loop();
-    mqtt.loop();
-    otcontrol.loop();
-    Sensor::loopAll();
-    devconfig.loop();
-    OneWireNode::loop();
+    
 #ifdef NODO
+    // Check for physical link status and swap if needed
+    if (!configMode) {
+        manageNetwork();
+    }
+
     static unsigned long lastDisplayUpdate = 0;
     if (now - lastDisplayUpdate > 1000 || uxQueueMessagesWaiting(button_press_queue)) { 
         displayNetworkStatus(now); 
@@ -391,5 +429,12 @@ void loop() {
     if (WIRED_ETHERNET_PRESENT) {
         Ethernet.maintain(); /* keep DHCP lease etc */
     }
-#endif   
+#endif 
+
+    portal.loop();
+    mqtt.loop();
+    otcontrol.loop();
+    Sensor::loopAll();
+    devconfig.loop();
+    OneWireNode::loop();
 }
