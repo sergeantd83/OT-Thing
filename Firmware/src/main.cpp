@@ -490,4 +490,6 @@ void loop() {
     Sensor::loopAll();
     devconfig.loop();
     OneWireNode::loop();
+
+    esp_task_wdt_reset();
 }
