@@ -10,7 +10,26 @@
 #include <EthernetESP32.h>
 #endif
 DevStatus devstatus;
+#ifdef NODO
+DevStatus::DevStatus() : numWifiDiscon(0) {
+    xMutex = NULL;
+}
 
+void DevStatus::lock() {
+    if (xMutex == NULL) {
+        xMutex = xSemaphoreCreateMutex();
+    }
+    
+    if (xMutex != NULL) {
+        xSemaphoreTake(xMutex, portMAX_DELAY);
+    }
+}
+
+void DevStatus::unlock() {
+    if (xMutex == NULL) return;   
+    xSemaphoreGive(xMutex);
+}
+#else
 DevStatus::DevStatus():
         numWifiDiscon(0) {
 }
@@ -22,7 +41,7 @@ void DevStatus::unlock() {
     doc.clear();
     mutex.unlock();
 }
-
+#endif
 JsonDocument &DevStatus::buildDoc() {
     doc.clear();
 
@@ -85,6 +104,10 @@ JsonDocument &DevStatus::buildDoc() {
 }
 
 void DevStatus::getJson(String &str) {
+#ifdef NODO_DUMMY_STRING
+    str = "{\"status\":\"ok\"}"; // <--- Send a tiny dummy string
+#else
     buildDoc();
     serializeJson(doc, str);
+#endif
 }

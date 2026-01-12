@@ -19,8 +19,11 @@ DevConfig::DevConfig():
 
 void DevConfig::begin() {
     fsOk = LittleFS.begin(false);
-
+#ifdef NODO
+    if (!fsOk) {
+#else
     if (!fsOk || configMode) {
+#endif
         if (configMode)
             Serial.println("Config mode: formatting LittleFS and reloading config.");
         else

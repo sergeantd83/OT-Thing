@@ -15,6 +15,7 @@
 #include <esp_wifi.h>
 #include "time.h"
 #include "main.h"
+#include "esp_task_wdt.h"
 
 #ifdef DEBUG
     #include <ArduinoOTA.h>
@@ -61,6 +62,9 @@ void statusLedLoop() {
 }
 
 void wifiEvent(WiFiEvent_t event) {
+#ifdef NODO
+    if (configMode) return;
+#endif
     switch (event) {
     case ARDUINO_EVENT_WIFI_STA_GOT_IP: {
         String hn = devconfig.getHostname();
@@ -179,9 +183,10 @@ void displayNetworkStatus(unsigned long now) {
         oled_display.println("Press Boot for more");
       } // config mode
     } else if ( pageno > 1 ) { 
-      devstatus.lock(); 
-      // Make a copy so we can unlock devstatus.
-      JsonDocument &doc= devstatus.buildDoc();
+      if (millis() > 5000) { 
+          devstatus.lock(); 
+          JsonDocument &doc = devstatus.buildDoc();
+
       if ( pageno == 2 || pageno == 3 ){
         snprintf(buffer, sizeof(buffer), "Heating circuit %d", pageno-1);
         oled_display.println(buffer);
@@ -227,6 +232,9 @@ void displayNetworkStatus(unsigned long now) {
 
       }
       devstatus.unlock();
+      } else {
+          oled_display.println(F("Loading data..."));
+      } 
     }
     // --- Memory Status ---
     // oled_display.setCursor(0, 20);
@@ -272,9 +280,6 @@ void manageNetwork() {
 
 void setup() {
     Serial.begin();
-#ifdef NODO
-    devconfig.begin();
-#endif
     Serial.setTxTimeoutMs(100);
     pinMode(GPIO_STATUS_LED, OUTPUT);
     pinMode(GPIO_CONFIG_BUTTON, INPUT);
@@ -303,8 +308,11 @@ void setup() {
       oled_display.println("Nodo OTGW32 V1.0.0");
       oled_display.setCursor(0, 20);          // Position on screen
       oled_display.println("Press Boot for more");
+      oled_display.setCursor(0, 30);          // Position on screen
+      oled_display.println("Hold Reset for config");
+
       // pretty flame
-      oled_display.drawBitmap(56, 34, flame_bitmap, 16, 16, WHITE);
+      oled_display.drawBitmap(56, 44, flame_bitmap, 16, 16, WHITE);
       // Push to display
       oled_display.display();
       OLED_PRESENT = true;
@@ -353,16 +361,15 @@ void setup() {
     if (configMode)
         statusLedData = 0xA000;
 #ifdef NODO
-// Kill the Station radio immediately so it doesn't fight the AP
     if (configMode) {
         WiFi.mode(WIFI_OFF); 
         delay(50);
         WiFi.mode(WIFI_AP); 
-        Serial.println("Config Mode: Radio prepared (AP-only).");
     }
-#endif
+#else
     Serial.begin();
     Serial.setTxTimeoutMs(100);
+#endif
 
 #ifdef DEBUG
     //auto bleSrv = NimBLEDevice::createServer();
@@ -382,37 +389,53 @@ void setup() {
     adv->start();*/
 #endif
 #ifdef NODO
-  // Only start WiFi if Ethernet isn't already running and not in config mode
-  if (WIRED_ETHERNET_PRESENT == false && !configMode) {
+    if (!configMode) {
 #endif
-    WiFi.onEvent(wifiEvent);
-    WiFi.setSleep(false);
-    WiFi.begin();
+        WiFi.onEvent(wifiEvent);
+        WiFi.setSleep(false);
+        WiFi.begin();
+        AddressableSensor::begin();
+        OneWireNode::begin();
+        BLESensor::begin();
+        haDisc.begin();
+        mqtt.begin();
 #ifdef NODO
-  } 
+    } 
 #endif
-#ifdef NODO
-  if (!configMode) {
-#endif
-    AddressableSensor::begin();
-  OneWireNode::begin();
-    BLESensor::begin();
-  haDisc.begin();
-  mqtt.begin();
-#ifdef NODO
-  }
-  if (!configMode)
-#else // moved this to top of setup()
-  devconfig.begin();
-#endif
-  configTime(devconfig.getTimezone(), 3600, PSTR("pool.ntp.org"));
 
+    // This is now outside the block, fixing the crash in Config Mode
+    devconfig.begin(); 
+    configTime(devconfig.getTimezone(), 3600, PSTR("pool.ntp.org"));
+#ifdef NODO
+    devstatus.lock();
+    delay(50); // Hold it long enough for the RTOS to register the allocation
+    devstatus.unlock();
+#endif
     portal.begin(configMode);
-#ifdef NODO
-  if (!configMode)
-#endif
-    command.begin();
 
+#ifdef NODO
+    delay(500);
+    if (!configMode)
+#endif
+        command.begin();
+#ifdef NODO
+    if (!configMode) { // Only enable the watchdog in Normal Mode
+#endif
+        esp_task_wdt_config_t wdt_config = {
+#ifdef NODO
+            .timeout_ms = 10000,
+            .idle_core_mask = (1 << 0) | (1 << 1), // check both cores
+#else
+            .timeout_ms = 6000,
+            .idle_core_mask = (1 << 0), // check both cores
+#endif
+            .trigger_panic = true
+        };
+        esp_task_wdt_init(&wdt_config);
+        esp_task_wdt_add(NULL);
+#ifdef NODO
+    }
+#endif
 #ifdef DEBUG
     ArduinoOTA.begin();
 #endif
@@ -420,6 +443,9 @@ void setup() {
 
 void loop() {
     unsigned long now = millis();
+#ifdef NODO
+    yield(); // keep WDT happy
+#endif
 
     static unsigned long btnDown = 0;
     if (digitalRead(GPIO_CONFIG_BUTTON) == 0) {
@@ -443,18 +469,19 @@ void loop() {
     
 #ifdef NODO
     // Check for physical link status and swap if needed
-    if (!configMode) {
+    if (!configMode) 
         manageNetwork();
-    }
+    else
+        delay(1); // keep WDT happy
 
     static unsigned long lastDisplayUpdate = 0;
     if (now - lastDisplayUpdate > 1000 || uxQueueMessagesWaiting(button_press_queue)) { 
         displayNetworkStatus(now); 
         lastDisplayUpdate = now;
     }
-    if (WIRED_ETHERNET_PRESENT) {
+
+    if (WIRED_ETHERNET_PRESENT) 
         Ethernet.maintain(); /* keep DHCP lease etc */
-    }
 #endif 
 
     portal.loop();

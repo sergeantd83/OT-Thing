@@ -197,9 +197,21 @@ AddressableSensor::AddressableSensor(const uint8_t *adr, const uint8_t adrLen, A
 void AddressableSensor::begin() {
     mutex = xSemaphoreCreateMutex();
 }
+#ifdef NODO
+void AddressableSensor::lock() {
+    // If NODO is defined, ensure the mutex exists before taking it
+    if (mutex == NULL) {
+        mutex = xSemaphoreCreateMutex();
+    }
+    if (mutex != NULL) {
+        xSemaphoreTake(mutex, portMAX_DELAY);
+    }
+}
+#else
 void AddressableSensor::lock() {
     xSemaphoreTake(mutex, (TickType_t) 250 / portTICK_PERIOD_MS);
 }
+#endif
 void AddressableSensor::unlock() {
     xSemaphoreGive(mutex);
 }

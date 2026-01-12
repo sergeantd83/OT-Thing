@@ -124,15 +124,21 @@ void Portal::begin(bool configMode) {
 
     websrv.on("/setwifi", HTTP_POST, [this] (AsyncWebServerRequest *request) {
         if (request->hasArg(F("ssid")) && request->hasArg(F("pass"))) {
+#ifndef NODO
             request->send(200);
             delay(500);
-
+#endif
             WiFi.disconnect();
             WiFi.persistent(true);
             WiFi.setAutoReconnect(true);
             String ssid = request->arg(F("ssid"));
             String pass = request->arg(F("pass"));
             WiFi.begin(ssid, pass);
+#ifdef NODO
+            // Trigger the reboot flag handled in Portal::loop()
+            this->reboot = true;
+            request->send(200, "text/plain", "Credentials Saved. Rebooting...");
+#endif
         }
         else
             request->send(400); // bad request
