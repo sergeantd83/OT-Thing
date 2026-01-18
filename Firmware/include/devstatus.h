@@ -4,7 +4,7 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <ESPAsyncWebServer.h>
-#include <mutex>
+#include "freertos/FreeRTOS.h"
 #ifdef NODO
 inline bool WIRED_ETHERNET_PRESENT, OLED_PRESENT = false;
 #endif
@@ -14,7 +14,7 @@ private:
 #ifdef NODO
     SemaphoreHandle_t xMutex; // Replace std::mutex
 #else
-    std::mutex mutex;
+    SemaphoreHandle_t mutex;
 #endif
 public:
     DevStatus();
