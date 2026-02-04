@@ -18,7 +18,7 @@ ID	Msg SV  TV  LV  Name
 73	R-	OEM diagnostic code ventilation/heat-recovery
 101	R-	Solar Storage status
 102	R-	Solar Storage specific fault flags
-115	R-	OEM diagnostic code
+115	R-	*   -   *   OEM diagnostic code
 
 
    Class 2 : Configuration Information
@@ -28,9 +28,9 @@ ID	Msg	Name
 74	R-	Configuration ventilation/heat-recovery
 75	R-	*   -   *   OpenTherm version ventilation/heat-recovery
 76  R-  *   -   *   Ventilation / heat-recovery product version number and type
-93	R-	Brand index
-94	R-	Brand version index
-95	R-	Brand serial number index
+93	R-	*   *   *   Brand index
+94	R-	*   *   *   Brand version index
+95	R-	*   *   *   Brand serial number index
 103	R-	Solar Storage configuration
 104\tR-\tSolar Storage product version number and type
 124	-W	-   *   -   OpenTherm version Master
@@ -77,7 +77,7 @@ ID	Msg	Name
 84	R-	*   -   *   Actual exhaust fan speed
 85	R-	*   -   *   Actual inlet fan speed
 96	RW	Cooling Operation hours
-97	RW	Power Cycles
+97	RW	*   -   *   Power Cycles
 98	-W	Type of sensor
 109	RW	Electricity producer starts
 110	RW	Electricity producer hours
@@ -87,8 +87,8 @@ ID	Msg	Name
 114	RW	*   -   *   Number of times flame signal was too low
 116	RW	*   -   *   Successful Burner starts
 117	RW	*   -   *   CH pump starts
-118	RW	DHW pump/valve starts
-119	RW	DHW burner starts
+118	RW	*   -   *   DHW pump/valve starts
+119	RW	*   -   *   DHW burner starts
 120	RW	*   -   *   Burner operation hours
 121	RW	*   -   *   CH pump operation hours
 122	RW	*   -   *   DHW pump/valve operation hours
@@ -107,7 +107,7 @@ ID	Msg	Name
 
    Class 6 : Transparent Slave Parameters
 ID	Msg	Name
-10	R-	Number of Transparent Slave Parameters
+10	R-	*   -   -   Number of Transparent Slave Parameters
 11	RW	TSP index/value
 88	R-	Number of TSPs ventilation/heat-recovery
 89	RW	TSP index/value ventilation/heat-recovery
@@ -116,7 +116,7 @@ ID	Msg	Name
 
    Class 7 : Fault History Data
 ID	Msg	Name
-12	R-	Size of Fault Buffer
+12	R-	*   -   -   Size of Fault Buffer
 13	R-	FHB-entry index/value
 90	R-	Size of Fault Buffer ventilation/heat-recovery
 91	R-	FHB-entry index/value ventilation/heat-recovery
@@ -136,70 +136,80 @@ ID	Msg	Name
 
 class OTValue {
 private:
-    const OpenThermMessageID id;
     unsigned long lastTransfer;
     const int interval;
-    virtual void getValue(JsonObject &stat) const = 0;
+    virtual void getValue(JsonVariant var) const = 0;
 protected:
+    virtual bool sendDiscovery();
+    bool sendDiscovery(String field);
+    const char* getName() const;
+    const OpenThermMessageID id;
     uint16_t value;
     bool enabled;
-    virtual bool sendDiscovery();
-    bool sendDiscovery(String field, const bool addBaseName = false);
-    const char* getName() const;
     bool discFlag;
-    const char *haName {nullptr};
+    bool setFlag;
+    uint32_t numSet;
+    OpenThermMessageType lastMsgType;
+    const char *haName;
 public:
     OTValue(const OpenThermMessageID id, const int interval, const char *haName = nullptr);
-    bool process();
+    virtual bool process();
     OpenThermMessageID getId() const;
-    void setValue(uint16_t val);
+    virtual void setValue(const OpenThermMessageType ty, const uint16_t val);
     uint16_t getValue();
     void setStatus(const OpenThermMessageType mt);
     void getJson(JsonObject &obj) const;
-    void disable();
-    void init(const bool enabled);
+    void getStatus(JsonObject &obj) const;
+    virtual void init(const bool enabled);
     void setTimeout();
     static OTValue* getSlaveValue(const OpenThermMessageID id);
     static OTValue* getThermostatValue(const OpenThermMessageID id);
     void refreshDisc();
-    bool isSet;
+    bool isSet() const;
+    bool hasReply() const;
+    OpenThermMessageType getLastMsgType() const;
 };
 
 class OTValueu16: public OTValue {
 private:
-    void getValue(JsonObject &obj) const;
+    void getValue(JsonVariant var) const override;
 public:
     OTValueu16(const OpenThermMessageID id, const int interval, const char *haName = nullptr);
-    uint16_t getValue() const;
 };
 
 class OTValueOperatingHours: public OTValueu16 {
 private:
-    bool sendDiscovery();
+    bool sendDiscovery() override;
 public:
     OTValueOperatingHours(const OpenThermMessageID id, const char *haName);
 };
 
 class OTValuei16: public OTValue {
 private:
-    void getValue(JsonObject &stat) const;
+    void getValue(JsonVariant var) const override;
 public:
     OTValuei16(const OpenThermMessageID id, const int interval);
-    int16_t getValue() const;
+};
+
+
+class OTValueBufSize: public OTValue {
+private:
+    void getValue(JsonVariant var) const override;
+public:
+    OTValueBufSize(const OpenThermMessageID id);
 };
 
 class OTValueFloat: public OTValue {
 private:
-    void getValue(JsonObject &obj) const;
+    void getValue(JsonVariant var) const override;
 public:
     OTValueFloat(const OpenThermMessageID id, const int interval);
-    double getValue() const;
 };
 
 
 class OTValueFloatTemp: public OTValueFloat {
 private:
-    bool sendDiscovery();
+    bool sendDiscovery() override;
 public:
     OTValueFloatTemp(const OpenThermMessageID id, const char *haName);
 };
@@ -207,18 +217,18 @@ public:
 class OTValueFlags: public OTValue {
 protected:
     struct Flag {
-        uint8_t bit;
-        const char *name;
-        const char *discName;
-        const char *haDevClass;
+        uint8_t bit {0};
+        const char *name {nullptr};
+        const char *discName {nullptr};
+        const char *haDevClass {nullptr};
     };
     uint8_t numFlags;
     const Flag *flagTable;
     bool slave;
     OTValueFlags(const OpenThermMessageID id, const int interval, const Flag *flagtable, const uint8_t numFlags, const bool slave);
-    void getValue(JsonObject &obj) const;
+    void getValue(JsonVariant var) const override;
     bool sendDiscFlag(String name, const char *field, const char *devClass);
-    bool sendDiscovery();
+    bool sendDiscovery() override;
 };
 
 class OTValueStatus: public OTValueFlags {
@@ -242,11 +252,11 @@ public:
 class OTValueMasterStatus: public OTValueFlags {
 private:
     const Flag flags[5] PROGMEM = {
-        {8, "ch_enable",    "CH enable",    nullptr},
-        {9, "dhw_enable",   "DHW enable",   nullptr},
-        {10, "cooling_enable", "cooling enable", nullptr},
-        {11, "otc_active",  "OTC active",   nullptr},
-        {12, "ch2_enable",  "CH2 enable",   nullptr}
+        {8, "ch_enable",        "CH enable",        nullptr},
+        {9, "dhw_enable",       "DHW enable",       nullptr},
+        {10, "cooling_enable",  "cooling enable",   nullptr},
+        {11, "otc_active",      "OTC active",       nullptr},
+        {12, "ch2_enable",      "CH2 enable",       nullptr}
     };
 public:    
     OTValueMasterStatus();
@@ -257,7 +267,7 @@ private:
     const Flag flags[6] PROGMEM = {
         {0, "fault",        "fault",                HA_DEVICE_CLASS_PROBLEM},
         {1, "vent_active",  "Ventilation active",   HA_DEVICE_CLASS_RUNNING },
-        {2, "bypass_open",  "Bypass open",          HA_DEVICE_CLASS_OPEN},
+        {2, "bypass_open",  "Bypass open",          HA_DEVICE_CLASS_OPENING},
         {3, "bypass_auto",  "Bypass auto",          HA_DEVICE_CLASS_RUNNING},
         {4, "free_vent",    "free ventilation",     HA_DEVICE_CLASS_RUNNING},
         {6, "diagnostic",   "diagnostic",           HA_DEVICE_CLASS_PROBLEM}
@@ -275,16 +285,16 @@ private:
         {11, "free_vent_enable"}
     };
 protected:
-    bool sendDiscovery();
+    bool sendDiscovery() override;
 public:    
     OTValueVentMasterStatus();
 };
 
 class OTValueSlaveConfigMember: public OTValueFlags {
 private:
-    void getValue(JsonObject &obj) const;
+    void getValue(JsonVariant var) const override;
     const Flag flags[6] PROGMEM = {
-        {8, "dhw_present",              "DHW presemt",              nullptr},
+        {8, "dhw_present",              "DHW present",              nullptr},
         {9, "ctrl_type",                "Control type on/off",      nullptr},
         {10, "cooling_config",          "Cooling supported",        nullptr},
         {11, "dhw_config",              "DHW storage",              nullptr},
@@ -302,7 +312,7 @@ public:
 
 class OTValueFaultFlags: public OTValueFlags {
 private:
-    void getValue(JsonObject &obj) const;
+    void getValue(JsonVariant var) const override;
     const Flag flags[6] PROGMEM = {
         {8, "service_request",      "service request",      HA_DEVICE_CLASS_PROBLEM},
         {9, "lockout_reset",        "lockout reset",        HA_DEVICE_CLASS_PROBLEM},
@@ -311,6 +321,8 @@ private:
         {12, "air_pressure_fault",  "air pressure fault",   HA_DEVICE_CLASS_PROBLEM},
         {13, "water_over_temp",     "water over temp",      HA_DEVICE_CLASS_PROBLEM}
     };
+    const char *OEM_FAULT_CODE PROGMEM = "oem_fault_code";
+    bool sendDiscovery() override;
 public:
     OTValueFaultFlags(const int interval);
 };
@@ -318,66 +330,58 @@ public:
 
 class OTValueVentFaultFlags: public OTValueFlags {
 private:
-    void getValue(JsonObject &obj) const;
+    void getValue(JsonVariant var) const override;
     const Flag flags[4] PROGMEM = {
         {8, "service_request",      "vent. service request",    HA_DEVICE_CLASS_PROBLEM},
         {9, "exhaust_fan_fault",    "exhaust fan fault",        HA_DEVICE_CLASS_PROBLEM},
         {10, "inlet_fan_fault",     "inlet fan fault",          HA_DEVICE_CLASS_PROBLEM},
         {11, "frost_protection",    "frost protection",         HA_DEVICE_CLASS_PROBLEM}
     };
+    const char *OEM_VENT_FAULT_CODE PROGMEM = "oem_vent_fault_code";
+    bool sendDiscovery() override;
 public:
     OTValueVentFaultFlags(const int interval);
 };
 
 class OTValueProductVersion: public OTValue {
 private:
-    void getValue(JsonObject &obj) const;
-    bool sendDiscovery();
+    void getValue(JsonVariant var) const override;
+    bool sendDiscovery() override;
 public:    
     OTValueProductVersion(const OpenThermMessageID id, const int interval, const char *haName);
 };
 
 class OTValueCapacityModulation: public OTValue {
 private:
-    void getValue(JsonObject &obj) const;
+    void getValue(JsonVariant var) const override;
     const char *MAX_CAPACITY = "max_capacity" PROGMEM;
     const char *MIN_MODULATION = "min_modulation" PROGMEM;
 protected:
-    bool sendDiscovery();
+    bool sendDiscovery() override;
 public:    
     OTValueCapacityModulation();
 };
 
-class OTValueDHWBounds: public OTValue {
+class OTValueTempBounds: public OTValue {
 private:
-    void getValue(JsonObject &obj) const;
-    const char *DHW_MAX = "dhwMax" PROGMEM;
-    const char *DHW_MIN = "dhwMin" PROGMEM;
+    void getValue(JsonVariant var) const override;
+    const char *MAX = "max" PROGMEM;
+    const char *MIN = "min" PROGMEM;
+    const char *namePrefix;
 protected:
-    bool sendDiscovery();
+    bool sendDiscovery() override;
 public:    
-    OTValueDHWBounds();
-};
-
-class OTValueCHBounds: public OTValue {
-private:
-    void getValue(JsonObject &obj) const;
-    const char *CH_MAX = "chMax" PROGMEM;
-    const char *CH_MIN = "chMin" PROGMEM;
-protected:
-    bool sendDiscovery();
-public:    
-    OTValueCHBounds();
+    OTValueTempBounds(const OpenThermMessageID id, const char *namePrefix);
 };
 
 class OTValueMasterConfig: public OTValueFlags {
 private:
     const Flag flags[1] PROGMEM = {
-        {0, "smartPowerImplemented"},
+        {8, "smartPowerImplemented"},
     };
-    void getValue(JsonObject &obj) const;
+    void getValue(JsonVariant var) const override;
 protected:
-    bool sendDiscovery();
+    bool sendDiscovery() override;
 public:    
     OTValueMasterConfig();
 };
@@ -385,10 +389,10 @@ public:
 class OTValueRemoteParameter: public OTValueFlags {
 private:
     const Flag flags[4] PROGMEM = {
-        {0, "dhw_setpoint_rw", "DHW setpoint write", nullptr},
-        {1, "max_ch_setpoint_rw", "Max. CH setpoint write", nullptr},
-        {8, "dhw_setpoint_trans", "DHW setpoint transfer", nullptr},
-        {9, "max_ch_setpoint_trans", "Max. CH setpoint transfer", nullptr}
+        {0, "dhw_setpoint_rw",      "DHW setpoint write",           nullptr},
+        {1, "max_ch_setpoint_rw",   "Max. CH setpoint write",       nullptr},
+        {8, "dhw_setpoint_trans",   "DHW setpoint transfer",        nullptr},
+        {9, "max_ch_setpoint_trans", "Max. CH setpoint transfer",   nullptr}
     };
 public:    
     OTValueRemoteParameter();
@@ -402,7 +406,7 @@ private:
         {1, "program_change_priority"}
     };
 protected:
-    bool sendDiscovery();
+    bool sendDiscovery() override;
 public:
     OTValueRemoteOverrideFunction();
 };
@@ -410,18 +414,18 @@ public:
 
 class OTValueDayTime: public OTValue {
 private:
-    void getValue(JsonObject &obj) const;
+    void getValue(JsonVariant obj) const override;
 protected:
-    bool sendDiscovery();
+    bool sendDiscovery() override;
 public:    
     OTValueDayTime();
 };
 
 class OTValueDate: public OTValue {
 private:
-    void getValue(JsonObject &obj) const;
+    void getValue(JsonVariant obj) const override;
 protected:
-    bool sendDiscovery();
+    bool sendDiscovery() override;
 public:    
     OTValueDate();
 };
@@ -429,7 +433,7 @@ public:
 
 class OTValueHeatExchangerTemp: public OTValueFloat {
 protected:
-    bool sendDiscovery();
+    bool sendDiscovery() override;
 public:
     OTValueHeatExchangerTemp();
 };
@@ -437,11 +441,11 @@ public:
 
 class OTValueBoilerFanSpeed: public OTValue {
 private:
-    void getValue(JsonObject &obj) const;
+    void getValue(JsonVariant var) const override;
     const char *SETPOINT = "setpoint" PROGMEM;
     const char *ACTUAL = "actual" PROGMEM;
 protected:
-    bool sendDiscovery();
+    bool sendDiscovery() override;
 public:
     OTValueBoilerFanSpeed();
 };
@@ -449,12 +453,24 @@ public:
 
 class OTValueFlameCurrent: public OTValueFloat {
 protected:
-    bool sendDiscovery();
+    bool sendDiscovery() override;
 public:
     OTValueFlameCurrent();
 };
 
 
-extern OTValue *slaveValues[47];
+class BrandInfo: public OTValue {
+private:
+    void getValue(JsonVariant var) const override;
+    char buf[50];
+public:
+    BrandInfo(const OpenThermMessageID id, const char *name);
+    void init(const bool enabled) override;
+    bool process() override;
+    void setValue(const OpenThermMessageType ty, const uint16_t val) override;
+};
+
+
+extern OTValue *slaveValues[55];
 extern OTValue *thermostatValues[17];
 extern const char* getOTname(OpenThermMessageID id);

@@ -20,7 +20,11 @@ CONFIG = {
         "dhwOn": True,
         "dhwTemperature": 50,
         "overrideDhw": False,
-        "coolOn": False
+        "coolOn": False,
+        "maxModulation": 95,
+        "otc": False,
+        "summerMode": False,
+        "dhmBlocking": False
     },
     "heating": [
         {
@@ -39,7 +43,15 @@ CONFIG = {
             "roomtemp": {
                 "source": 1
             },
-            "overrideFlow": False
+            "overrideFlow": False,
+            "roomComp": {
+                "enabled": False,
+                "p": 1.0,
+                "i": 0.5,
+                "boost": 3.0
+            },
+            "enablyHyst": False,
+            "hysteresis": 0.5
         },
         {
             "flow": 30,
@@ -57,7 +69,15 @@ CONFIG = {
             "roomtemp": {
                 "source": 1
             },
-            "overrideFlow": False
+            "overrideFlow": False,
+            "roomComp": {
+                "enabled": False,
+                "p": 1.0,
+                "i": 0.5,
+                "boost": 3.0
+            },
+            "enablyHyst": False,
+            "hysteresis": 0.5
         }
     ],
     "vent": {
@@ -81,7 +101,11 @@ CONFIG = {
         "pass": "",
         "tls": False
     },
-    "masterMemberId": 8
+    "masterMemberId": 8,
+    "timezone": 3600,
+    "hostname": "otthing",
+    "haPrefix": "homeassistant",
+    "haName": "OTthing"
 }
 
 

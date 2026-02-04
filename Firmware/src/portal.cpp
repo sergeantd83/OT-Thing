@@ -9,6 +9,7 @@
 #include "devconfig.h"
 #include "html.h"
 #include "otcontrol.h"
+#include "otvalues.h"
 #include "httpUpdate.h"
 
 static const char APP_JSON[] PROGMEM = "application/json";
@@ -24,24 +25,12 @@ static AsyncWebServer websrv(80);
 AsyncWebSocket ws("/ws");
 
 
-class WebSrvSem: public SemHelper {
-public:
-    WebSrvSem(AsyncWebServerRequest *request):
-            SemHelper(portal.mutex, 3000) {
-        if (!(*this))
-            request->send(403);
-    }
-};
-
-
 Portal::Portal():
     reboot(false),
     updateEnable(true) {
 }
 
 void Portal::begin(bool configMode) {
-    mutex = xSemaphoreCreateMutex();
-    
     if (configMode) {
         WiFi.persistent(false);
 #ifdef NODO
@@ -82,25 +71,19 @@ void Portal::begin(bool configMode) {
         request->send(200, F("text/html"), (uint8_t*) html, strlen_P(html));
     });
 
-    websrv.on("/config", HTTP_GET, [this] (AsyncWebServerRequest *request) {
-        WebSrvSem sem(request);
-        if (!sem)
-            return;
+    websrv.on(PSTR("/config"), HTTP_GET, [this] (AsyncWebServerRequest *request) {
         if (LittleFS.exists(FPSTR(CFG_FILENAME)))
             request->send(LittleFS, FPSTR(CFG_FILENAME), FPSTR(APP_JSON));
         else
             request->send(404);
     });
 
-    websrv.on("/config", HTTP_POST, 
+    websrv.on(PSTR("/config"), HTTP_POST, 
         [this] (AsyncWebServerRequest *request) {
         },
         [] (AsyncWebServerRequest *request, const String &filename, size_t index, uint8_t *data, size_t len, bool final) {
         },
         [this] (AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
-            WebSrvSem sem(request);
-            if (!sem)
-                return;
             static String confBuf;
             if (!index)
                 confBuf.clear();
@@ -115,7 +98,7 @@ void Portal::begin(bool configMode) {
         }
     );
 
-    websrv.on("/scan", HTTP_GET, [this] (AsyncWebServerRequest *request) {
+    websrv.on(PSTR("/scan"), HTTP_GET, [this] (AsyncWebServerRequest *request) {
         JsonDocument doc;
         JsonObject jobj = doc.to<JsonObject>();
 
@@ -140,7 +123,7 @@ void Portal::begin(bool configMode) {
         request->send(response);
     });
 
-    websrv.on("/setwifi", HTTP_POST, [this] (AsyncWebServerRequest *request) {
+    websrv.on(PSTR("/setwifi"), HTTP_POST, [this] (AsyncWebServerRequest *request) {
         if (request->hasArg(F("ssid")) && request->hasArg(F("pass"))) {
 #ifndef NODO
             request->send(200);
@@ -162,28 +145,47 @@ void Portal::begin(bool configMode) {
             request->send(400); // bad request
     });
 
-    websrv.on("/status", HTTP_GET, [this](AsyncWebServerRequest *request) {
-        WebSrvSem sem(request);
-        if (!sem)
+    websrv.on(PSTR("/status"), HTTP_GET, [this](AsyncWebServerRequest *request) {
+        if (httpupdate.isUpdating()) {
+            request->send(503);
             return;
+        }
+        JsonDocument doc;
+        devstatus.buildDoc(doc);
         AsyncResponseStream *response = request->beginResponseStream(FPSTR(APP_JSON));
-        devstatus.lock();
-        JsonDocument &doc = devstatus.buildDoc();
         serializeJson(doc, *response);
         request->send(response);
-        devstatus.unlock();
     });
 
-    websrv.on("/reboot", HTTP_GET, [this](AsyncWebServerRequest *request) {
+    websrv.on(PSTR("/otitems"), HTTP_GET, [this](AsyncWebServerRequest *request) {
+        if (httpupdate.isUpdating()) {
+            request->send(503);
+            return;
+        }
+        JsonDocument doc;
+        JsonObject jSlave = doc[F("slave")].to<JsonObject>();
+            for (auto *valobj: slaveValues)
+                valobj->getStatus(jSlave);
+
+        JsonObject jMaster = doc[F("master")].to<JsonObject>();
+            for (auto *valobj: thermostatValues)
+                valobj->getStatus(jMaster);
+
+        AsyncResponseStream *response = request->beginResponseStream(FPSTR(APP_JSON));
+        serializeJson(doc, *response);
+        request->send(response);
+    });
+
+    websrv.on(PSTR("/reboot"), HTTP_GET, [this](AsyncWebServerRequest *request) {
         request->send(200);
         this->reboot = true;
     });
 
-    websrv.on("/update", HTTP_POST, 
+    websrv.on(PSTR("/update"), HTTP_POST, 
         [this] (AsyncWebServerRequest *request) { // onRequest handler
             int httpRes;
 
-            if (!this->updateEnable) {
+            if (!this->updateEnable || httpupdate.isUpdating()) {
                 httpRes = 503; // service unavailable
             }
             else {
@@ -198,20 +200,20 @@ void Portal::begin(bool configMode) {
             request->send(response);
         },
         [this] (AsyncWebServerRequest *request, const String &filename, size_t index, uint8_t *data, size_t len, bool final) { // onUpdate handler
-            if (!this->updateEnable)
+            if (!this->updateEnable || httpupdate.isUpdating())
                 return;
 
-            if (!index) {
-                bool res = Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH);
-            }
-            uint32_t res = Update.write(data, len);
-            if (final) {
-                bool res = Update.end(true);
-            }
+            if (!index)
+                Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH);
+
+            Update.write(data, len);
+
+            if (final)
+                Update.end(true);
         }
     );
 
-    websrv.on("/slaverequest", HTTP_GET, [this](AsyncWebServerRequest *request) {
+    websrv.on(PSTR("/slaverequest"), HTTP_GET, [this](AsyncWebServerRequest *request) {
         if (!request->hasParam("id")) {
             request->send(503);
             return;
@@ -247,14 +249,24 @@ void Portal::begin(bool configMode) {
             request->send(503);
     });
 
-    websrv.on("/checkupdate", HTTP_POST, [this](AsyncWebServerRequest *request) {
+    websrv.on(PSTR("/checkupdate"), HTTP_POST, [this](AsyncWebServerRequest *request) {
         this->checkUpdate = true;
         request->send(200);
     });
 
-    websrv.on("/install", HTTP_POST, [this](AsyncWebServerRequest *request) {
+    websrv.on(PSTR("/install"), HTTP_POST, [this](AsyncWebServerRequest *request) {
         this->doUpdate = true;
         request->send(200);
+    });
+
+    websrv.on(PSTR("/topics"), HTTP_GET, [this](AsyncWebServerRequest *request) {
+        String list;
+        for (uint8_t topic = Mqtt::TOPIC_OUTSIDETEMP; topic < Mqtt::TOPIC_UNKNOWN; topic++) {
+            String line;
+            line = mqtt.getCmdTopic((Mqtt::MqttTopic) topic);
+            list += line + F("\r\n");
+        }
+        request->send(200, F("text/plain"), list);
     });
 }
 

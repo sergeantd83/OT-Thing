@@ -2,7 +2,7 @@
 
 const char *HA_DEVICE_CLASS_RUNNING PROGMEM = "running";
 const char *HA_DEVICE_CLASS_PROBLEM PROGMEM = "problem";
-const char *HA_DEVICE_CLASS_OPEN PROGMEM = "open";
+const char *HA_DEVICE_CLASS_OPENING PROGMEM = "opening";
 
 const char HA_AVAILABILITY[]                    PROGMEM = "availability";
 const char HA_TOPIC[]                           PROGMEM = "t";
@@ -75,6 +75,10 @@ void HADiscovery::clearDoc() {
     doc.clear();
 }
 
+bool HADiscovery::publish() {
+    return false;
+}
+
 void HADiscovery::setValueTemplate(String valueTemplate) {
     doc[FPSTR(HA_VALUE_TEMPLATE)] = valueTemplate;
 }
@@ -95,8 +99,11 @@ void HADiscovery::setCurrentTemperatureTemplate(String templ) {
     doc[FPSTR(HA_CURRENT_TEMPERATURE_TEMPLATE)] = templ;
 }
 
-void HADiscovery::setStateTopic(String &stateTopic) {
-    doc[FPSTR(HA_STATE_TOPIC)] = stateTopic;
+void HADiscovery::setStateTopic(String stateTopic) {
+    if (stateTopic.isEmpty())
+        doc.remove(FPSTR(HA_STATE_TOPIC));
+    else
+        doc[FPSTR(HA_STATE_TOPIC)] = stateTopic;
 }
 
 void HADiscovery::setMinMax(double min, double max, double step) {

@@ -3,60 +3,7 @@
 #include <OpenTherm.h>
 #include "ArduinoJson.h"
 #include "util.h"
-
-class OTWriteRequest {
-private:
-    uint32_t nextMillis {0};
-    uint16_t interval;
-protected:
-    OpenThermMessageID id;
-public:
-    OTWriteRequest(OpenThermMessageID id, uint16_t intervalS);
-    void send(const uint16_t data);
-    void sendFloat(const double f);
-    void force();
-    operator bool();
-};
-
-class OTWRSetDhw: public OTWriteRequest {
-public:
-    OTWRSetDhw();
-};
-
-class OTWRSetBoilerTemp: public OTWriteRequest {
-public:
-    OTWRSetBoilerTemp(const uint8_t ch);
-};
-
-class OTWRMasterConfigMember: public OTWriteRequest {
-public:
-    OTWRMasterConfigMember();
-};
-
-class OTWRSetVentSetpoint: public OTWriteRequest {
-public:
-    OTWRSetVentSetpoint();
-};
-
-class OTWRSetRoomTemp: public OTWriteRequest {
-public:
-    OTWRSetRoomTemp(const uint8_t ch);
-};
-
-class OTWRSetRoomSetPoint: public OTWriteRequest {
-public:
-    OTWRSetRoomSetPoint(const uint8_t ch);
-};
-
-class OTWRSetOutsideTemp: public OTWriteRequest {
-public:
-    OTWRSetOutsideTemp();
-};
-
-class OTWRSetMaxModulation: public OTWriteRequest {
-public:
-    OTWRSetMaxModulation();
-};
+#include "masterrequests.h"
 
 struct SlaveRequestStruct {
     OpenThermMessageID idReq;
@@ -68,6 +15,7 @@ struct SlaveRequestStruct {
 
 class OTControl {
 friend OTWriteRequest;
+friend class BrandInfo;
 friend class SemMaster;
 public:
     enum CtrlMode: int8_t {
@@ -93,6 +41,8 @@ private:
     double getFlow(const uint8_t channel);
     uint16_t tmpToData(const double tmpf);
     void hwYield();
+    unsigned long buildBrandResponse(const OpenThermMessageID id, String &str, const uint8_t idx);
+    bool sendChDiscoveries(const uint8_t ch, const bool en);
     unsigned long lastBoilerStatus;
     unsigned long lastVentStatus;
     enum OTMode: int8_t {
@@ -130,6 +80,7 @@ private:
         CtrlMode mode {CTRLMODE_AUTO};
         bool overrideFlow;
         struct PiCtrl {
+            bool enabled;
             bool init { false };
             double roomTempFilt;
             double rspPrev; // previous room setpoint
@@ -188,6 +139,8 @@ private:
     OTWRSetRoomSetPoint setRoomSetPoint[2];
     OTWRSetOutsideTemp setOutsideTemp;
     OTWRSetMaxModulation setMaxModulation;
+    OTWRProdVersion setProdVersion;
+    OTWRSetOTVersion setOTVersion;
     uint8_t masterMemberId;
     struct OTInterface {
         OTInterface(const uint8_t inPin, const uint8_t outPin, const bool isSlave);
@@ -226,6 +179,8 @@ public:
     void setOverrideCh(const bool ovrd, const uint8_t channel);
     void setOverrideDhw(const bool ovrd);
     void setMaxMod(const int mm);
+    void setRoomComp(const bool en, const uint8_t channel);
+    void bypass();
 };
 
 

@@ -4,7 +4,7 @@
 extern const char *HA_DEVICE_CLASS_RUNNING PROGMEM;
 extern const char *HA_DEVICE_CLASS_PROBLEM PROGMEM;
 extern const char *HA_DEVICE_CLASS_HEAT PROGMEM;
-extern const char *HA_DEVICE_CLASS_OPEN PROGMEM;
+extern const char *HA_DEVICE_CLASS_OPENING PROGMEM;
 
 class HADiscovery {
 private:
@@ -20,10 +20,10 @@ public:
     String devPrefix;
     String defaultStateTopic;
     static void setHAPrefix(String prefix);
-    virtual bool publish() {return false;}
+    virtual bool publish();
     void clearDoc();
     void setValueTemplate(String valueTemplate);
-    void setStateTopic(String &stateTopic);
+    void setStateTopic(String stateTopic);
     void setMinMax(double min, double max, double step);
     void setMinMaxTemp(double min, double max, double step = 0);
     void setTemperatureStateTopic(String topic);
