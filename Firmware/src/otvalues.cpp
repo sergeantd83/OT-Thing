@@ -188,6 +188,7 @@ OTValue::OTValue(const OpenThermMessageID id, const int interval, const char *ha
         discFlag(false),
         setFlag(false),
         numSet(0),
+        lastMsgType(OpenThermMessageType::RESERVED),
         haName(haName) {
 }
 
@@ -265,7 +266,7 @@ bool OTValue::sendDiscovery() {
     switch (id) {
         case OpenThermMessageID::CO2exhaust:
             haDisc.createSensor(F("CO2 exhaust"), sName);
-            haDisc.setUnit(F("ppm"));
+            haDisc.setUnit(FPSTR(HA_UNIT_PPM));
             haDisc.setDeviceClass(F("carbon_dioxide"));
             break;
 
@@ -284,17 +285,17 @@ bool OTValue::sendDiscovery() {
         case OpenThermMessageID::RHexhaust:
             haDisc.createSensor(F("humidity exhaust"), sName);
             haDisc.setDeviceClass(F("humidity"));
-            haDisc.setUnit(F("%"));
+            haDisc.setUnit(FPSTR(HA_UNIT_PERCENT));
             break;
 
         case OpenThermMessageID::RPMexhaust:
             haDisc.createSensor(F("exhaust fan speed"), sName);
-            haDisc.setUnit(F("RPM"));
+            haDisc.setUnit(FPSTR(HA_UNIT_RPM));
             break;
 
         case OpenThermMessageID::RPMsupply:
             haDisc.createSensor(F("supply fan speed"), sName);
-            haDisc.setUnit(F("RPM"));
+            haDisc.setUnit(FPSTR(HA_UNIT_RPM));
             break;
 
         case OpenThermMessageID::TSet:
@@ -639,7 +640,7 @@ bool OTValueCapacityModulation::sendDiscovery() {
     if (!OTValue::sendDiscovery(FPSTR(MAX_CAPACITY)))
         return false;
     haDisc.createSensor(F("Min. modulation"), FPSTR(MIN_MODULATION));
-    haDisc.setUnit(F("%"));
+    haDisc.setUnit(FPSTR(HA_UNIT_PERCENT));
     return OTValue::sendDiscovery(FPSTR(MIN_MODULATION));
 }
 
@@ -751,12 +752,14 @@ void OTValueBoilerFanSpeed::getValue(JsonVariant var) const {
 }
 
 bool OTValueBoilerFanSpeed::sendDiscovery() {
-    haDisc.createTempSensor(F("Boiler fan speed setpoint"), FPSTR(SETPOINT));
+    haDisc.createSensor(F("Boiler fan speed setpoint"), FPSTR(SETPOINT));
+    haDisc.setUnit(FPSTR(HA_UNIT_HZ));
     String field = FPSTR(getName());
     if (!OTValue::sendDiscovery(FPSTR(SETPOINT)))
         return false;
     
-    haDisc.createTempSensor(F("Boiler fan speed actual"), FPSTR(ACTUAL));
+    haDisc.createSensor(F("Boiler fan speed actual"), FPSTR(ACTUAL));
+    haDisc.setUnit(FPSTR(HA_UNIT_HZ));
     return OTValue::sendDiscovery(FPSTR(ACTUAL));
 }
 

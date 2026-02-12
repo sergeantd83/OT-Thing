@@ -1,7 +1,6 @@
 import shutil
 import gzip
 import os
-import esptool
 import time
 import webbrowser
 import requests
@@ -10,6 +9,7 @@ import subprocess
 import tempfile
 from serial.tools import list_ports
 Import("env")
+import esptool
 
 
 CONFIG = {

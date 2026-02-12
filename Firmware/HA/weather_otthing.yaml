@@ -1,0 +1,46 @@
+blueprint:
+  name: Weather to OTthing
+  domain: automation
+  author: "S. Seegel"
+
+  input:
+    source_entity:
+      name: Source entity
+      description: "Temperature data source"
+      selector:
+        entity:
+          multiple: false
+          filter:
+            - domain: weather
+
+    target_entity:
+      name: Targets
+      selector:
+        entity:
+          multiple: true
+          filter:
+            - domain: number
+              device_class: temperature
+
+mode: single
+
+variables:
+  source_entity: !input source_entity
+  target_entity: !input target_entity
+
+trigger:
+  - platform: time_pattern
+    seconds: /30
+
+condition:
+  - condition: template
+    value_template: >
+      {{ state_attr(source_entity, 'temperature') not in [none] }}
+
+action:
+  - service: number.set_value
+    target:
+      entity_id: !input target_entity
+    data:
+      value: >
+        {{ state_attr(source_entity, 'temperature') | float | round(2) }}

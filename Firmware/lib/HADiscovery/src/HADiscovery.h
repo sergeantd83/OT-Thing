@@ -5,6 +5,15 @@ extern const char *HA_DEVICE_CLASS_RUNNING PROGMEM;
 extern const char *HA_DEVICE_CLASS_PROBLEM PROGMEM;
 extern const char *HA_DEVICE_CLASS_HEAT PROGMEM;
 extern const char *HA_DEVICE_CLASS_OPENING PROGMEM;
+extern const char *HA_DEVICE_CLASS_TEMPERATURE PROGMEM;
+
+extern const char *HA_UNIT_PPM PROGMEM;
+extern const char *HA_UNIT_RPM PROGMEM;
+extern const char *HA_UNIT_HZ PROGMEM;
+extern const char *HA_UNIT_PERCENT PROGMEM;
+extern const char *HA_UNIT_CELSIUS PROGMEM;
+extern const char *HA_UNIT_KELVIN PROGMEM;
+
 
 class HADiscovery {
 private:
