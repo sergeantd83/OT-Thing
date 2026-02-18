@@ -81,10 +81,15 @@ void DevStatus::unlock() {
 
     if (!outsideTemp.owResult.isEmpty())
         doc[F("owResult")] = outsideTemp.owResult;
-
+#ifdef NODO
+    if (WiFi.getMode() != WIFI_AP && WiFi.getMode() != WIFI_AP_STA) { /* don't do this if in config mode*/
+#endif
     JsonObject jo = doc[F("1wire")].to<JsonObject>();
     OneWireNode::writeJsonAll(jo);
 
     JsonObject ble = doc[F("BLE")].to<JsonObject>();
     BLESensor::writeJsonAll(ble);
+#ifdef NODO
+    }
+#endif
 }

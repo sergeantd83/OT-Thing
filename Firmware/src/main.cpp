@@ -144,6 +144,10 @@ void displayNetworkStatus(unsigned long now) {
         oled_display.println(buffer);
         
         oled_display.setCursor(0, 10);
+        snprintf(buffer, sizeof(buffer), "PW: 12345678");
+        oled_display.println(buffer);
+
+        oled_display.setCursor(0, 20);
         snprintf(buffer, sizeof(buffer), "http://%s/", WiFi.softAPIP().toString().c_str());
         oled_display.println(buffer);
       } else { // not config mode
@@ -292,7 +296,7 @@ void setup() {
       oled_display.setCursor(0, 0);          // Position on screen
 
       // Print message
-      oled_display.println("Nodo OTGW32 V1.0.3");
+      oled_display.println("Nodo OTGW32");
       oled_display.setCursor(0, 20);          // Position on screen
       oled_display.println("Press Boot for more");
       oled_display.setCursor(0, 30);          // Position on screen
@@ -414,8 +418,8 @@ void loop() {
     unsigned long now = millis();
 #ifdef NODO
     yield(); // keep WDT happy
+    if (!configMode) {
 #endif
-
     static unsigned long btnDown = 0;
     if (digitalRead(GPIO_CONFIG_BUTTON) == 0) {
         if ((now - btnDown) > 10000) {
@@ -434,6 +438,9 @@ void loop() {
     }
     else
         btnDown = now;
+#ifdef NODO
+    }
+#endif 
 
 #ifdef DEBUG
     ArduinoOTA.handle();
