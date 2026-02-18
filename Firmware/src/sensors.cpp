@@ -402,7 +402,7 @@ void BLESensor::parse(std::string &data) {
 
         case 0x02: {
             int16_t temp = ((data[i] | (data[i+1] << 8)) + 5) / 10;
-            this->temp = temp / 10.0;
+            this->temp = temp / 100.0;
             i += 2;
             break;
         }
